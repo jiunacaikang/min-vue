@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0,user-scalable=no"/>
+    <script src="http://pv.sohu.com/cityjson?ie=utf-8"></script><!-- 获取当前ip -->
+    <title></title>
+</head>
+<style type="text/css">
+	* { margin: 0; padding: 0}
+	body{background: ;}
+	.container { width: 150px; margin: 20px auto; height: 40px; background: orange; cursor: pointer;text-align: center;color:#fff;line-height: 40px;font-family: "microsoft yahei";border-radius: 3px;}
+	input{
+		width: 200px;
+		height: 40px;
+		padding: 0 5px;
+		border:1px solid #ddd;
+		border-radius: 5px;
+		outline: none;
+		display: block;
+		margin:5px auto;
+	}
+	#app{
+		text-align: center;
+	}
+</style>
+<body>
+	<div class="container" id="container">获取当前ip</div>
+	<div class="container" id="ip" style="background:#ccc">ip:</div>
+
+	<div id="app">
+		<input type="text" v-model="msg">
+		{{msg}}
+		<!-- <input type="text" v-model="id">
+		{{id}} -->
+	</div>	
+</body>
+</html>
+<script type="text/javascript" language="javascript">
+		container.onclick = function(){
+			var oNowIp = returnCitySN["cip"];
+			var oStorage = window.localStorage;
+			if( oStorage ){
+				//取
+				var ipData = oStorage.getItem('ipKey')?oStorage.getItem('ipKey'):'';				
+				if(ipData.length>0){
+					ipData.split(',').forEach(function(el,index){
+						console.log(el+" 测试随机数:"+Math.floor(Math.random()*50));
+						ip.innerText='ip:'+el;
+					});
+				}else{
+					console.log("no ipKey");
+				}
+				//存
+				if(ipData.indexOf(oNowIp)==-1){//不存在当前ip才存
+					if(ipData==''){
+						ipData = [];
+					}else{
+						ipData=ipData.split(',');
+					}
+					ipData.push(oNowIp);
+					oStorage.setItem('ipKey',ipData.toString());
+				}
+			}else{
+				alert("您的设备不支持localStorage");
+			}
+		};
+</script>
+<script type="text/javascript">
+	//数据初始化绑定
+	function compile(node,vm){
+		var reg = /\{\{(.*)\}\}/;
+		//节点类型为元素
+		if(node.nodeType === 1){
+			var attr = node.attributes;
+			//解析属性
+			for(var i=0;i<attr.length;i++){
+				if(attr[i].nodeName == 'v-model'){
+					var name = attr[i].nodeValue;//获取v-model 绑定的属性名
+					node.addEventListener('input', function(e){
+						vm[name] = e.target.value;
+					});
+					node.value = vm[name]; //将data的值赋给该node
+					node.removeAttribute('v-model');
+				}
+			}
+		}
+		//节点类型为text
+		if(node.nodeType === 3){
+			if(reg.test(node.nodeValue)){
+				var name = RegExp.$1;//获取匹配到的字符串 属性名字(msg..)
+				name = name.trim();
+
+				new Watcher(vm,node,name);//对节点类型为text的 构造Watcher来绑定数据
+			}
+		}
+	}
+
+	//watcher 函数
+	var curSub = null; //定义一个全局的变量来存储声明的Watcher对象
+	function Watcher(vm,node,name){
+		console.log(this)
+		//debugger
+		curSub = this;//1首先:将自己赋给一个全局变量curSub
+		this.name = name;
+		this.node = node;
+		this.vm = vm;
+		this.updateVal();//2其次:执行了updateVal方法，进而执行了getNewVal方法，getNewVal方法读取了vm的访问器属性，从而触发了访问器属性的get方法，get方法中将该watcher添加到了对应的访问器属性的dep中
+		curSub = null;//4最后:将curSub设为空，因为它是全局变量，也是watch与dep关联的唯一桥梁，任何时刻都必须保证Dep.target只有一个值 保证每次都用的是一个新的
+	}
+
+	Watcher.prototype = {
+		updateVal:function(){
+			this.getNewVal();//3然后1:获取了属性相对应的值
+			this.node.nodeValue = this.value;//3然后2:更新了视图
+		},
+		getNewVal:function(){
+			this.value = this.vm[this.name]; //获取属性对应的最新的值
+		}
+	}
+	//转成fragment节点对象
+	function nodeToFragment(node,vm){
+		var flag = document.createDocumentFragment();
+		var child;
+		while (child = node.firstChild){
+			compile(child,vm);//绑定数据
+			flag.appendChild(child);//劫持node的所有子节点
+		}
+		return flag;
+	}
+
+	//一个主题对象
+	function Dep(){
+		this.subs = [];
+	}
+	Dep.prototype = {
+		addSub:function(sub){//为主题对象添加订阅者
+			this.subs.push(sub);
+		},
+		notify:function(){//发布通知，让订阅者们执行updateVal方法
+			this.subs.forEach(function(sub){
+				sub.updateVal();
+			})
+		}
+	}
+
+	//定义响应式数据
+	function defineReactive(vm,key,val){
+		var dep = new Dep();
+		Object.defineProperty(vm,key,{
+			get:function(){//vm 上的对象key被访问的时候 调用此方法
+				//添加订阅者watcher到主题对象Dep
+				if(curSub) {//如果存在，就添加到主题对象Dep的订阅者列表中
+					dep.addSub(curSub);
+				}
+				return val;//把val return出来??
+			},
+			set:function(newVal){//vm 上的对象key改变的时候 调用此方法
+				if(newVal === val) {
+					return
+				}
+				val = newVal;
+				console.log(val);
+				//在更改数据的时候作为发布者发出通知
+				dep.notify();	
+			}
+		})
+	}
+
+	//观察者
+	function observe(objData,vm){
+		//对objData的每个key和value执行defineReactive
+		Object.keys(objData).forEach(function(key){
+			defineReactive(vm,key,objData[key]);
+		});
+	}
+
+	//定义Vue对象
+	function Vue(options){
+		//对数据进行观察
+		observe(options.data,this);
+
+		var id = options.el;
+		var dom = nodeToFragment(document.getElementById(id),this);
+		//编译完成后，将dom返回到app中
+		document.getElementById(id).appendChild(dom);
+	}
+	//实例化Vue对象
+	var vm = new Vue({
+		el:"app",
+		data:{
+			msg:'hello world',
+			id:'10001'
+		}
+	});
+
+</script>
